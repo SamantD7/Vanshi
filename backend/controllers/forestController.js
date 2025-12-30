@@ -1,4 +1,5 @@
-﻿const ForestLand = require("../models/ForestLand");
+﻿const axios = require("axios");
+const ForestLand = require("../models/ForestLand");
 const NDVIData = require("../models/NDVIData");
 const CarbonAsset = require("../models/CarbonAsset");
 const CarbonCreditBalance = require("../models/CarbonCreditBalance");
@@ -60,20 +61,32 @@ exports.verifyForest = async (req, res) => {
     const forest = await ForestLand.findById(req.params.id);
     if (!forest) return res.status(404).send("Forest not found");
 
-    forest.status = "VERIFIED";
-    await forest.save();
+    // Call Python GEE Service for real analysis
+    try {
+      const response = await axios.post("http://localhost:8000/analyze-forest", {
+        latitude: forest.location.latitude,
+        longitude: forest.location.longitude,
+        forest_area_ha: forest.forest_area_ha
+      });
 
-    // Generate simulated NDVI Data
-    const ndvi_value = 0.75; // Simulated for prototype
-    const ndviData = new NDVIData({
-      forest_id: forest._id,
-      ndvi_value: ndvi_value,
-      forest_health: getHealthStatus(ndvi_value),
-      confidence_score: 0.92
-    });
-    await ndviData.save();
+      const { ndvi, forest_health, verification_status } = response.data;
 
-    res.send({ forest, ndviData });
+      forest.status = verification_status === "REJECTED" ? "PENDING" : "VERIFIED";
+      await forest.save();
+
+      const ndviData = new NDVIData({
+        forest_id: forest._id,
+        ndvi_value: ndvi,
+        forest_health: forest_health,
+        confidence_score: 0.95 // Adjusted from GEE analysis
+      });
+      await ndviData.save();
+
+      res.send({ forest, ndviData });
+    } catch (geeError) {
+      console.error("GEE Service Error:", geeError.message);
+      return res.status(503).send("GEE analysis service unavailable");
+    }
   } catch (error) {
     res.status(400).send(error);
   }
