@@ -9,7 +9,7 @@ const VillageDashboard = () => {
     const [formData, setFormData] = useState({
         village_name: '', district: '', state: '',
         forest_area_ha: '', forest_type: 'Broadleaf',
-        latitude: 28.6139, longitude: 77.2090
+        latitude: '', longitude: ''
     });
 
     const fetchForests = async () => {
@@ -29,6 +29,11 @@ const VillageDashboard = () => {
                 location: { latitude: formData.latitude, longitude: formData.longitude }
             });
             setShowModal(false);
+            setFormData({
+                village_name: '', district: '', state: '',
+                forest_area_ha: '', forest_type: 'Broadleaf',
+                latitude: '', longitude: ''
+            });
             fetchForests();
         } catch (err) { console.error(err); }
     };
@@ -180,6 +185,16 @@ const VillageDashboard = () => {
                             <div style={{ marginBottom: '15px' }}>
                                 <label>State</label>
                                 <input type="text" className="glass" style={{ width: '100%', padding: '10px' }} value={formData.state} onChange={e => setFormData({ ...formData, state: e.target.value })} required />
+                            </div>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
+                                <div style={{ marginBottom: '15px' }}>
+                                    <label>Latitude</label>
+                                    <input type="number" step="any" className="glass" style={{ width: '100%', padding: '10px' }} value={formData.latitude} onChange={e => setFormData({ ...formData, latitude: e.target.value })} required />
+                                </div>
+                                <div style={{ marginBottom: '15px' }}>
+                                    <label>Longitude</label>
+                                    <input type="number" step="any" className="glass" style={{ width: '100%', padding: '10px' }} value={formData.longitude} onChange={e => setFormData({ ...formData, longitude: e.target.value })} required />
+                                </div>
                             </div>
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
                                 <div style={{ marginBottom: '15px' }}>
