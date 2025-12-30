@@ -9,6 +9,7 @@ const carbonRoutes = require("./routes/carbonRoutes");
 const transactionRoutes = require("./routes/transactionRoutes");
 const companyRoutes = require("./routes/companyRoutes");
 const adminRoutes = require("./routes/adminRoutes");
+const { startEventListener } = require("./services/blockchainService");
 
 dotenv.config();
 
@@ -89,6 +90,7 @@ mongoose.connect(MONGO_URI)
   .then(() => {
     console.log("MongoDB connected");
     seedAdmin();
+    startEventListener(); // Start watching for on-chain events
   })
   .catch(err => console.log("MongoDB connection error:", err));
 

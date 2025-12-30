@@ -5,6 +5,7 @@ const CompanySchema = new mongoose.Schema({
   industry: { type: String, required: true },
   carbon_target_tco2e: { type: Number, required: true },
   user_id: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
+  wallet_address: { type: String },
   created_at: { type: Date, default: Date.now }
 });
 

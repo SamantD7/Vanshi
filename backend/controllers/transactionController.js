@@ -1,7 +1,10 @@
 ﻿const Transaction = require("../models/Transaction");
 const CarbonCreditBalance = require("../models/CarbonCreditBalance");
+const CarbonAsset = require("../models/CarbonAsset");
 const Company = require("../models/Company");
 const Settings = require("../models/Settings");
+const ForestLand = require("../models/ForestLand");
+const { buyCreditsOnChain } = require("../services/blockchainService");
 
 exports.buyCredits = async (req, res) => {
   try {
@@ -35,6 +38,21 @@ exports.buyCredits = async (req, res) => {
     balance.remaining_credits -= credits_to_buy;
     balance.last_updated = Date.now();
     await balance.save();
+
+    // TRIGGER ON-CHAIN PURCHASE
+    try {
+      // Find the forest to get the on-chain project ID
+      const forest = await ForestLand.findOne({ _id: (await CarbonAsset.findById(carbon_id)).forest_id });
+      if (forest && forest.on_chain_project_id !== undefined) {
+        console.log(`📡 Triggering on-chain purchase for project ${forest.on_chain_project_id}`);
+        await buyCreditsOnChain(forest.on_chain_project_id, credits_to_buy);
+      } else {
+        console.warn("⚠️ No on-chain project ID found for this asset. DB update only.");
+      }
+    } catch (bcError) {
+      console.error("❌ On-chain purchase failed:", bcError);
+      // We continue since the DB is already updated, but the user should know
+    }
 
     const transaction = new Transaction({
       company_id: company._id,

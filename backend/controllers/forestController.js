@@ -5,6 +5,8 @@ const CarbonAsset = require("../models/CarbonAsset");
 const CarbonCreditBalance = require("../models/CarbonCreditBalance");
 const Settings = require("../models/Settings");
 const { calculateCarbon, getHealthStatus, getBaseRate } = require("../services/carbonService");
+const { createProjectOnChain, mintCreditsOnChain } = require("../services/blockchainService");
+const User = require("../models/User");
 
 exports.registerForest = async (req, res) => {
   try {
@@ -82,6 +84,31 @@ exports.verifyForest = async (req, res) => {
       });
       await ndviData.save();
 
+      // IF VERIFIED, Create Project On-Chain
+      if (forest.status === "VERIFIED") {
+        try {
+          const owner = await User.findById(forest.owner_user_id);
+          const settings = await Settings.findOne();
+          const baseRate = getBaseRate(forest.forest_type, settings);
+
+          const projectId = await createProjectOnChain(
+            owner.wallet_address || "0x70997970C51812dc3A010C7d01b50e0d17dc79C8", // Fallback to Hardhat Account #1
+            Math.floor(forest.forest_area_ha * 100), // Cap (example multiplier)
+            baseRate,
+            new Date().getFullYear(),
+            `ipfs://forest-${forest._id}`
+          );
+
+          if (projectId !== null) {
+            forest.on_chain_project_id = projectId;
+            await forest.save();
+          }
+        } catch (bcError) {
+          console.error("On-chain project creation failed:", bcError);
+          // We still keep the forest verified in DB, but log the error
+        }
+      }
+
       res.send({ forest, ndviData });
     } catch (geeError) {
       console.error("GEE Service Error:", geeError.message);
@@ -141,6 +168,15 @@ exports.activateCredits = async (req, res) => {
       remaining_credits: Math.floor(total_carbon)
     });
     await balance.save();
+
+    // Mint Credits On-Chain
+    if (forest.on_chain_project_id !== undefined) {
+      try {
+        await mintCreditsOnChain(forest.on_chain_project_id, Math.floor(total_carbon));
+      } catch (bcError) {
+        console.error("On-chain minting failed:", bcError);
+      }
+    }
 
     res.send({ status: "success", carbonAsset, balance });
   } catch (error) {

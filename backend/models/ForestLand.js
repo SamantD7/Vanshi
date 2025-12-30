@@ -12,6 +12,7 @@ const ForestLandSchema = new mongoose.Schema({
   forest_type: { type: String, required: true },
   owner_user_id: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
   status: { type: String, enum: ["PENDING", "VERIFIED"], default: "PENDING" },
+  on_chain_project_id: { type: Number },
   created_at: { type: Date, default: Date.now }
 });
 
