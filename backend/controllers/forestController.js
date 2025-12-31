@@ -190,8 +190,8 @@ exports.deleteForest = async (req, res) => {
     const forest = await ForestLand.findById(req.params.id);
     if (!forest) return res.status(404).send("Forest not found");
 
-    // Check ownership
-    if (forest.owner_user_id.toString() !== req.user._id.toString()) {
+    // Check ownership OR Admin role
+    if (forest.owner_user_id.toString() !== req.user._id.toString() && req.user.role !== "ADMIN") {
       return res.status(403).send("Unauthorized to delete this forest");
     }
 

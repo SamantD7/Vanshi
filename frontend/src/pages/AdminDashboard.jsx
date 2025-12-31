@@ -46,6 +46,19 @@ const AdminDashboard = () => {
         }
     };
 
+    const handleDelete = async (id) => {
+        if (window.confirm('Are you sure you want to remove this forest and all its carbon credits? This action cannot be undone.')) {
+            try {
+                await axios.delete(`http://localhost:5000/api/forests/${id}`);
+                alert('Forest and associated data removed successfully!');
+                fetchData();
+            } catch (err) {
+                console.error(err);
+                alert('Failed to remove forest');
+            }
+        }
+    };
+
     return (
         <div className="container" style={{ padding: '40px 20px' }}>
             <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '40px' }}>
@@ -71,7 +84,6 @@ const AdminDashboard = () => {
                         <h3 style={{ marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '10px' }}>
                             <AlertTriangle color="var(--warning)" /> Pending Verifications
                         </h3>
-                        {/* ... table unchanged ... */}
                         <div style={{ overflowX: 'auto' }}>
                             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                                 <thead style={{ background: '#f8fafc' }}>
@@ -98,6 +110,45 @@ const AdminDashboard = () => {
                                     {forests.filter(f => f.status === 'PENDING').length === 0 && (
                                         <tr>
                                             <td colSpan="4" style={{ padding: '30px', textAlign: 'center', color: 'var(--text-muted)' }}>No pending verifications</td>
+                                        </tr>
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div className="card">
+                        <h3 style={{ marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                            <CheckCircle color="var(--primary)" /> Active Marketplace Forests
+                        </h3>
+                        <div style={{ overflowX: 'auto' }}>
+                            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                                <thead style={{ background: '#f8fafc' }}>
+                                    <tr>
+                                        <th style={{ padding: '12px', textAlign: 'left' }}>Village</th>
+                                        <th style={{ padding: '12px', textAlign: 'left' }}>Credits</th>
+                                        <th style={{ padding: '12px', textAlign: 'center' }}>Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {forests.filter(f => f.status === 'VERIFIED').map(f => (
+                                        <tr key={f._id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                                            <td style={{ padding: '12px' }}>{f.village_name}</td>
+                                            <td style={{ padding: '12px' }}>{f.sales_data?.remaining_credits} / {f.sales_data?.total_issued}</td>
+                                            <td style={{ padding: '12px', textAlign: 'center' }}>
+                                                <button
+                                                    className="btn"
+                                                    style={{ padding: '6px 12px', fontSize: '0.85rem', background: '#fee2e2', color: '#991b1b' }}
+                                                    onClick={() => handleDelete(f._id)}
+                                                >
+                                                    Remove
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                    {forests.filter(f => f.status === 'VERIFIED').length === 0 && (
+                                        <tr>
+                                            <td colSpan="3" style={{ padding: '30px', textAlign: 'center', color: 'var(--text-muted)' }}>No active forests</td>
                                         </tr>
                                     )}
                                 </tbody>

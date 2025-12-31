@@ -21,6 +21,7 @@ const wallet = new ethers.Wallet(process.env.ADMIN_PRIVATE_KEY || "0xac0974bec39
 
 // For local testing/managed platforms: Villager Wallet (Hardhat Account #1)
 const villagerWallet = new ethers.Wallet(process.env.VILLAGER_PRIVATE_KEY || "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4303d6193c28e", provider);
+exports.villagerWallet = villagerWallet;
 
 const creditContract = new ethers.Contract(
     process.env.VANSHI_CREDIT_ADDRESS || "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512",
@@ -39,6 +40,28 @@ const usdcContract = new ethers.Contract(
     MockUSDC_ABI,
     wallet
 );
+
+async function ensureVillagerHasGas() {
+    try {
+        const villagerAddress = villagerWallet.address;
+        const balance = await provider.getBalance(villagerAddress);
+        if (balance < ethers.parseEther("0.1")) {
+            console.log(`💸 Funding Villager ${villagerAddress} with 1 ETH for gas...`);
+            // Explicit nonce for admin to avoid race conditions
+            const nonce = await provider.getTransactionCount(wallet.address, "latest");
+            const fundTx = await wallet.sendTransaction({
+                to: villagerAddress,
+                value: ethers.parseEther("1.0"),
+                nonce
+            });
+            await fundTx.wait();
+        }
+        return true;
+    } catch (e) {
+        console.warn("⚠️ Funding villager failed:", e.message);
+        return false;
+    }
+}
 
 exports.createProjectOnChain = async (developerAddress, cap, price, vintage, metadataUrl) => {
     try {
@@ -71,26 +94,19 @@ exports.createProjectOnChain = async (developerAddress, cap, price, vintage, met
                 const villagerAddress = villagerWallet.address;
                 console.log(`🔓 Auto-authorizing Marketplace for Villager ${villagerAddress}...`);
 
-                // 0. Ensure Villager has gas money (Local/Managed only)
-                const balance = await provider.getBalance(villagerAddress);
-                if (balance < ethers.parseEther("0.1")) {
-                    console.log(`💸 Funding Villager ${villagerAddress} with 1 ETH for gas...`);
-                    const fundTx = await wallet.sendTransaction({
-                        to: villagerAddress,
-                        value: ethers.parseEther("1.0")
-                    });
-                    await fundTx.wait();
-                }
+                // 0. Ensure Villager has gas money
+                await ensureVillagerHasGas();
 
                 const villagerCreditContract = creditContract.connect(villagerWallet);
                 const isApproved = await villagerCreditContract.isApprovedForAll(villagerAddress, marketplaceContract.target);
                 if (!isApproved) {
-                    const approveTx = await villagerCreditContract.setApprovalForAll(marketplaceContract.target, true);
+                    const nonce = await provider.getTransactionCount(villagerAddress, "latest");
+                    const approveTx = await villagerCreditContract.setApprovalForAll(marketplaceContract.target, true, { nonce });
                     await approveTx.wait();
                     console.log("✅ Marketplace authorized by Villager.");
                 }
             } catch (authError) {
-                console.warn("⚠️ Villager auto-approval failed (Optional for non-managed wallets):", authError.message);
+                console.warn("⚠️ Villager auto-approval failed:", authError.message);
             }
 
             return projectId;
@@ -118,6 +134,13 @@ exports.buyCreditsOnChain = async (projectId, amount) => {
     try {
         console.log(`🛒 Buying ${amount} credits on-chain for Project ${projectId}...`);
 
+        // 0. DIAGNOSTIC: Check if USDC contract exists
+        const usdcCode = await provider.getCode(usdcContract.target);
+        if (usdcCode === "0x") {
+            console.error(`❌ CRITICAL: No USDC contract code found at ${usdcContract.target}. Did you redeploy?`);
+            throw new Error("USDC contract not found on-chain");
+        }
+
         // 1. Check if we need to approve USDC
         const allowance = await usdcContract.allowance(wallet.address, marketplaceContract.target);
 
@@ -132,14 +155,24 @@ exports.buyCreditsOnChain = async (projectId, amount) => {
         // 2. FAILSAFE: Ensure Project Owner (Villager) has authorized Marketplace
         try {
             const project = await creditContract.projects(projectId);
-            const developer = project.developer;
-            const isApproved = await creditContract.isApprovedForAll(developer, marketplaceContract.target);
+            const owner = project.owner;
 
-            if (!isApproved && developer.toLowerCase() === villagerWallet.address.toLowerCase()) {
-                console.log("🔓 Failsafe: Authorizing Marketplace for Villager...");
-                const villagerCreditContract = creditContract.connect(villagerWallet);
-                const approveTx = await villagerCreditContract.setApprovalForAll(marketplaceContract.target, true);
-                await approveTx.wait();
+            if (owner && owner !== ethers.ZeroAddress) {
+                const isApproved = await creditContract.isApprovedForAll(owner, marketplaceContract.target);
+
+                if (!isApproved && owner.toLowerCase() === villagerWallet.address.toLowerCase()) {
+                    console.log("🔓 Failsafe: Authorizing Marketplace for Villager...");
+
+                    // 1. Ensure Villager has gas money
+                    await ensureVillagerHasGas();
+
+                    const villagerCreditContract = creditContract.connect(villagerWallet);
+
+                    // Explicitly get nonce to avoid "Nonce too low" on fast nodes
+                    const nonce = await provider.getTransactionCount(villagerWallet.address, "latest");
+                    const approveTx = await villagerCreditContract.setApprovalForAll(marketplaceContract.target, true, { nonce });
+                    await approveTx.wait();
+                }
             }
         } catch (authErr) {
             console.warn("⚠️ Failsafe approval check failed:", authErr.message);

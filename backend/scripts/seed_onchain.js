@@ -13,7 +13,7 @@ const CarbonCreditBalance = require("../models/CarbonCreditBalance");
 const Settings = require("../models/Settings");
 
 // Blockchain Service
-const { createProjectOnChain, mintCreditsOnChain } = require("../services/blockchainService");
+const { createProjectOnChain, mintCreditsOnChain, villagerWallet } = require("../services/blockchainService");
 
 async function seed() {
     try {
@@ -24,17 +24,27 @@ async function seed() {
         console.log("✅ MongoDB Connected");
 
         // 2. Ensure we have a Villager User
+        // Wipe old test user if it has the wrong address
+        const correctAddress = villagerWallet.address;
+        console.log(`🔎 Target Villager Address: ${correctAddress}`);
+
         let villager = await User.findOne({ email: "villager_test@gmail.com" });
+        if (villager && villager.wallet_address.toLowerCase() !== correctAddress.toLowerCase()) {
+            console.log("🗑️ Deleting old test villager with incorrect address...");
+            await User.deleteOne({ _id: villager._id });
+            villager = null;
+        }
+
         if (!villager) {
             villager = new User({
                 name: "Test Villager",
                 email: "villager_test@gmail.com",
                 password: "password123",
                 role: "VILLAGE",
-                wallet_address: "0x70997970C51812dc3A010C7d01b50e0d17dc79C8" // Hardhat Account #1
+                wallet_address: correctAddress
             });
             await villager.save();
-            console.log("✅ Created Test Villager");
+            console.log("✅ Created Test Villager with correct address");
         }
 
         // 3. Register a New Forest
